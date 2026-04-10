@@ -4,18 +4,20 @@ __pycache__/
 *.pyo
 .venv/
 venv/
+*.egg-info/
 
-# fd_watcher dumps
+# fd_watcher runtime outputs
 fdwatch_dump_*.txt
-
-# Private leak data directories
-FD_LEAK/
-online/
-session-workflows/
-1271948_*/
-
-# JSONL session logs
 *.jsonl
+
+# Auto-generated screenshots (keep docs/ tracked)
+/FdWatcherApp_*.svg
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
 
 # OS
 .DS_Store

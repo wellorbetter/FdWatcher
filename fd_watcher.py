@@ -290,6 +290,7 @@ class FdWatcherApp(App):
         Binding("t", "send_fdtrack", "FdTrack(39)"),
         Binding("r", "refresh_now", "立即刷新"),
         Binding("z", "reset_baseline", "重置基线"),
+        Binding("s", "screenshot", "截图(SVG)"),
         Binding("?", "show_help", "帮助"),
         Binding("up,k", "move_up", "上移", show=False),
         Binding("down,j", "move_down", "下移", show=False),
@@ -310,6 +311,7 @@ class FdWatcherApp(App):
    z   重置「△初始」基线为当前快照
    m   发送 kill -42  → monitortrack 开始/停止堆栈记录
    t   发送 kill -39  → fdtrack dump 调用栈到 logcat
+   s   截图保存为 SVG 文件
    ?   显示本帮助
    q   退出
 
@@ -632,6 +634,10 @@ class FdWatcherApp(App):
             return
         adb_shell(f"kill -39 {self.pid}")
         self.call_from_thread(self._log, f"[yellow]已发送 kill -39 到 pid={self.pid} (fdtrack dump)[/yellow]")
+
+    def action_screenshot(self) -> None:
+        path = self.save_screenshot(path=".")
+        self.notify(f"截图已保存: {path}")
 
 
 # ──────────────────────────────────────────────
