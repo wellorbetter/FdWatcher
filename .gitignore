@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+
+# fd_watcher dumps
+fdwatch_dump_*.txt
+
+# Private leak data directories
+FD_LEAK/
+online/
+session-workflows/
+1271948_*/
+
+# JSONL session logs
+*.jsonl
+
+# OS
+.DS_Store
+Thumbs.db
