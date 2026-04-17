@@ -1,4 +1,9 @@
-"""解析 simpleperf report --csv 输出为 PerfSnapshot。"""
+"""解析 simpleperf report --csv 输出为 PerfSnapshot。
+
+兼容两种 CSV 格式:
+  普通模式:   Overhead,Sample,EventCount,Shared Object,Symbol
+  --children: Children,Self,Sample,AccEventCount,SelfEventCount,Shared Object,Symbol
+"""
 
 from __future__ import annotations
 
@@ -17,49 +22,57 @@ def parse_simpleperf_csv(csv_text: str, max_entries: int = 50) -> PerfSnapshot |
     total_samples = 0
     total_event_count = 0
 
-    data_lines: list[str] = []
-    for line in csv_text.splitlines():
+    # 两阶段解析: 先找 CSV header 行，header 之前都是元数据，之后都是数据
+    lines = csv_text.splitlines()
+    csv_start_idx = -1
+    for i, line in enumerate(lines):
         stripped = line.strip()
-        if not stripped:
-            continue
+        if stripped.startswith(("Overhead,", "Children,")):
+            csv_start_idx = i
+            break
+        # 元数据行
+        text = stripped.lstrip("# ")
+        if m := re.match(r"(?:Event|event):\s*(\S+)", text):
+            event_name = m.group(1)
+        elif m := re.match(r"(?:Samples|samples):\s*(\d+)", text):
+            total_samples = int(m.group(1))
+        elif m := re.match(r"(?:Event count|event_count):\s*(\d+)", text):
+            total_event_count = int(m.group(1))
 
-        # Header 元数据: 两种格式都兼容
-        # 格式 1 (注释): # event: instructions
-        # 格式 2 (Key:Val): Event: instructions:u (type 0, config 1)
-        if stripped.startswith("#") or ":" in stripped and not stripped.startswith("Overhead"):
-            text = stripped.lstrip("# ")
-            if m := re.match(r"(?:Event|event):\s*(\S+)", text):
-                event_name = m.group(1)
-            elif m := re.match(r"(?:Samples|samples):\s*(\d+)", text):
-                total_samples = int(m.group(1))
-            elif m := re.match(r"(?:Event count|event_count):\s*(\d+)", text):
-                total_event_count = int(m.group(1))
-            # 跳过 Cmdline:, Arch: 等无关 header
-            if not stripped.startswith("Overhead"):
-                continue
-
-        data_lines.append(stripped)
-
-    if not data_lines:
+    if csv_start_idx < 0:
         return None
 
+    data_lines = [l.strip() for l in lines[csv_start_idx:] if l.strip()]
+
     reader = csv.DictReader(data_lines)
+    fieldnames = reader.fieldnames or []
+    is_children_mode = "Children" in fieldnames
+
     entries: list[PerfEntry] = []
     for row in reader:
         try:
-            overhead = row.get("Overhead", "0").strip().rstrip("%")
-            # 兼容两种列名: "EventCount" (实际) 和 "Event Count" (文档)
-            event_count_str = (
-                row.get("EventCount")
-                or row.get("Event Count")
-                or "0"
-            ).strip()
+            if is_children_mode:
+                pct_str = row.get("Children", "0").strip().rstrip("%")
+                event_count_str = row.get("AccEventCount", "0").strip()
+            else:
+                pct_str = row.get("Overhead", "0").strip().rstrip("%")
+                event_count_str = (
+                    row.get("EventCount")
+                    or row.get("Event Count")
+                    or "0"
+                ).strip()
+
+            dso = row.get("Shared Object", "").strip()
+            symbol = row.get("Symbol", "").strip()
+            if not dso and not symbol:
+                continue
+
             entries.append(PerfEntry(
-                dso=row.get("Shared Object", "").strip(),
-                symbol=row.get("Symbol", "").strip(),
+                dso=dso,
+                symbol=symbol,
                 event_count=int(event_count_str),
                 sample_count=int(row.get("Sample", "0").strip()),
-                percentage=float(overhead) if overhead else 0.0,
+                percentage=float(pct_str) if pct_str else 0.0,
             ))
         except (ValueError, KeyError):
             continue

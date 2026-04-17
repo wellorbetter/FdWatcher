@@ -91,16 +91,17 @@ class SimpleperfCollector:
         record_timeout = math.ceil(cfg.duration_s) + 10
 
         # --app 模式在 SELinux Enforcing 下有权限，-p 模式通常被拒
+        # -g 记录调用栈，配合 report --children 归因到 Java 业务层
         use_app = not cfg.target.isdigit()
         if use_app:
             record_cmd = (
                 f"simpleperf record --app {cfg.target} "
-                f"--duration {cfg.duration_s} -e {cfg.event} -o {data_path}"
+                f"--duration {cfg.duration_s} -e {cfg.event} -g -o {data_path}"
             )
         else:
             record_cmd = (
                 f"simpleperf record -p {pid} "
-                f"--duration {cfg.duration_s} -e {cfg.event} -o {data_path}"
+                f"--duration {cfg.duration_s} -e {cfg.event} -g -o {data_path}"
             )
 
         try:
@@ -108,7 +109,7 @@ class SimpleperfCollector:
 
             report_output = adb_shell(
                 f"simpleperf report -i {data_path} "
-                f"--csv --sort dso,symbol -n --print-event-count",
+                f"--csv --sort dso,symbol -n --print-event-count --children",
                 adb_bin=cfg.adb_bin,
                 timeout=15,
             )
