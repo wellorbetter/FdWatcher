@@ -80,6 +80,18 @@ def truncate_symbol(symbol: str, max_len: int = 45) -> str:
     return symbol[:max_len - 1] + "…"
 
 
+_JAVA_DSO_SUFFIXES = (".apk", ".odex", ".oat", ".vdex", ".dex")
+
+
+def is_java_entry(dso: str) -> bool:
+    """判断 DSO 是否属于 Java/Kotlin 代码层。"""
+    if "[JIT app cache]" in dso:
+        return True
+    if dso.endswith(_JAVA_DSO_SUFFIXES):
+        return True
+    return False
+
+
 # ──────────────────────────────────────────────
 # FilterInput
 # ──────────────────────────────────────────────
@@ -179,6 +191,7 @@ class PerfTable(DataTable):
         self,
         snapshot: DeltaSnapshot,
         filter_text: str = "",
+        java_only: bool = False,
     ) -> None:
         saved_key: str | None = None
         try:
@@ -193,6 +206,8 @@ class PerfTable(DataTable):
         self.clear()
 
         entries = snapshot.entries
+        if java_only:
+            entries = [de for de in entries if is_java_entry(de.entry.dso)]
         if filter_text:
             needle = filter_text.lower()
             entries = [

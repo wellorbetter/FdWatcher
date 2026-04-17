@@ -80,6 +80,7 @@ class CpuWatcherApp(App):
     BINDINGS = [
         Binding("q", "quit", "退出"),
         Binding("p", "toggle_pause", "暂停/继续"),
+        Binding("j", "toggle_java_only", "仅Java"),
         Binding("d", "dump", "Dump快照"),
         Binding("f", "flamegraph", "火焰图"),
         Binding("r", "refresh_now", "立即刷新"),
@@ -103,6 +104,7 @@ class CpuWatcherApp(App):
    z   重置「Δ/base」基线为当前快照
    d   Dump 当前快照到文件（待实现）
    f   生成火焰图（待实现）
+   j   切换仅显示 Java/Kotlin 层（过滤 native/kernel）
    /   打开搜索框，过滤函数名或模块名
    Esc 关闭搜索框
    s   截图保存为 SVG 文件
@@ -132,7 +134,8 @@ class CpuWatcherApp(App):
         self._last_snapshot: DeltaSnapshot | None = None
         self._entry_map: dict[str, DeltaEntry] = {}
         self._wake_event = threading.Event()
-        self._paused = threading.Event()  # set = paused
+        self._paused = threading.Event()
+        self._java_only: bool = False
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -211,7 +214,7 @@ class CpuWatcherApp(App):
             self._last_snapshot, target, self._config.interval_s,
         )
         self.query_one("#perf_table", PerfTable).update_data(
-            self._last_snapshot, self._filter_text,
+            self._last_snapshot, self._filter_text, self._java_only,
         )
         self._update_detail_from_cursor()
 
@@ -281,6 +284,15 @@ class CpuWatcherApp(App):
             self._log("[yellow]⏸ 已暂停采集 (按 p 继续)[/yellow]")
             self.query_one("#status_panel", StatusPanel).update(
                 Text("⏸ 已暂停 — 按 p 继续", style="bold yellow")
+            )
+
+    def action_toggle_java_only(self) -> None:
+        self._java_only = not self._java_only
+        label = "Java/Kotlin" if self._java_only else "全部"
+        self._log(f"[cyan]过滤: {label}[/cyan]")
+        if self._last_snapshot:
+            self.query_one("#perf_table", PerfTable).update_data(
+                self._last_snapshot, self._filter_text, self._java_only,
             )
 
     def action_dump(self) -> None:
