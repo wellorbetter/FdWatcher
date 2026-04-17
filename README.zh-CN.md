@@ -3,8 +3,8 @@
 </div>
 
 <div align="center">
-  <h1>FdWatcher</h1>
-  <p>实时监控 Android 进程文件描述符（fd）分布的终端 TUI 工具，专注于 ashmem 泄漏检测。</p>
+  <h1>Android Perf TUI Toolkit</h1>
+  <p>Android 性能诊断 TUI 工具集 — fd 泄漏检测 + CPU 指令级性能分析。</p>
 
   <p>
     <img alt="Python" src="https://img.shields.io/badge/Python-3.9%2B-blue?logo=python&logoColor=white">
@@ -20,7 +20,18 @@
 
 ---
 
-## 特性
+## 工具列表
+
+| 工具 | 说明 |
+|---|---|
+| **[fd_watcher](#fd_watcher)** | 实时 fd 分布监控 — 检测 ashmem 泄漏 |
+| **[cpu_watcher](#cpu_watcher)** | 实时函数级 CPU 指令分析 — 基于 simpleperf |
+
+---
+
+## fd_watcher
+
+### 特性
 
 | | |
 |---|---|
@@ -164,6 +175,107 @@ adb root
 **强制停止进程后消失了？**
 
 FdWatcher 会自动重连，并在新 PID 上重置 △baseline。
+
+---
+
+## cpu_watcher
+
+基于 `simpleperf` 的实时函数级 CPU 指令分析工具。周期性执行 `simpleperf record` + `simpleperf report`，在 TUI 中展示函数级指令数排名及变化趋势。
+
+### 特性
+
+| | |
+|---|---|
+| **函数级分析** | 按指令数排名展示每个函数的 CPU 开销 |
+| **变化追踪** | `Δ/prev`（与上次比）和 `Δ/baseline`（与启动时比） |
+| **搜索过滤** | `/` 键按函数名或模块名过滤 |
+| **暂停/继续** | `p` 键冻结画面，方便分析 |
+| **火焰图导出** | `f` 键导出折叠栈格式，可用 flamegraph.pl 生成火焰图 |
+| **快照导出** | `d` 键保存当前分析结果到文本文件 |
+| **自动探测 adb** | WSL 环境自动查找 `adb.exe` |
+| **可配置采样** | `--duration` 和 `--interval` 控制采样行为 |
+
+### 快速开始
+
+```bash
+# 按包名监控
+python3 cpu_watcher.py com.example.myapp
+
+# 自定义采样：2 秒采集，5 秒间隔
+python3 cpu_watcher.py com.example.myapp -d 2 -i 5
+
+# 按 PID 监控，指定 adb 路径
+python3 cpu_watcher.py 28907 --adb /mnt/d/Sdk/platform-tools/adb.exe
+
+# 使用 cpu-cycles 事件
+python3 cpu_watcher.py com.example.myapp -e cpu-cycles:u
+
+# 也可以作为模块运行
+python3 -m cpu_watcher com.example.myapp
+```
+
+### 命令行参数
+
+```
+usage: cpu_watcher [-h] [--duration DURATION] [--interval INTERVAL]
+                   [--event EVENT] [--adb ADB] [--max-entries MAX_ENTRIES]
+                   target
+
+positional arguments:
+  target                包名或 PID
+
+options:
+  --duration, -d        每次 record 持续时间，单位秒（默认：1）
+  --interval, -i        采集周期间隔，单位秒（默认：3）
+  --event, -e           PMU 事件名（默认：instructions:u）
+  --adb ADB             adb 可执行文件路径（自动探测）
+  --max-entries, -n     最多显示条目数（默认：50）
+```
+
+### 快捷键
+
+| 按键 | 功能 |
+|---|---|
+| `↑` / `↓` | 上下移动光标 |
+| `p` | 暂停 / 继续采集 |
+| `r` | 立即刷新 |
+| `z` | 重置 Δ/baseline 基线 |
+| `/` | 搜索过滤函数名或模块名 |
+| `Esc` | 关闭搜索 |
+| `d` | 导出快照到文件 |
+| `f` | 导出火焰图数据 |
+| `s` | 保存 SVG 截图 |
+| `?` | 帮助面板 |
+| `q` | 退出 |
+
+### 列说明
+
+| 列名 | 说明 |
+|---|---|
+| # | 按指令数排名 |
+| 占比% | 占总事件百分比 |
+| 指令数 | 该函数的事件计数 |
+| Δ/prev | 与上次采集的变化 |
+| Δ/base | 与基线的累计变化 |
+| 模块 | 共享库 / DSO 名称 |
+| 函数 | 符号名（过长会截断） |
+
+### 工作原理
+
+```
+simpleperf record --app <包名> --duration N -e instructions:u
+  → simpleperf report --csv --sort dso,symbol
+  → 解析 CSV 输出
+  → 计算 delta（短期 + 长期）
+  → 渲染到 Textual DataTable
+```
+
+### 环境要求
+
+- Android 设备需要有 `simpleperf`（userdebug/eng 版本或 NDK simpleperf）
+- adb 连接
+- `--app` 模式（默认）：目标应用需为 debuggable
+- `-p` 模式（PID）：可能需要 root，取决于 SELinux 策略
 
 ---
 

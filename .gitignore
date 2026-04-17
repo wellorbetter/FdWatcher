@@ -10,6 +10,10 @@ venv/
 fdwatch_dump_*.txt
 *.jsonl
 
+# cpu_watcher runtime outputs
+cpu_perf_dump_*.txt
+cpu_perf_flame_*.folded
+
 # Auto-generated screenshots (keep docs/ tracked)
 /FdWatcherApp_*.svg
 

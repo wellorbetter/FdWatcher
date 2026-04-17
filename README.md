@@ -3,8 +3,8 @@
 </div>
 
 <div align="center">
-  <h1>FdWatcher</h1>
-  <p>Real-time Android file descriptor monitoring TUI — catch ashmem leaks before they crash your app.</p>
+  <h1>Android Perf TUI Toolkit</h1>
+  <p>Real-time Android performance monitoring TUI tools — fd leak detection + CPU instruction profiling.</p>
 
   <p>
     <img alt="Python" src="https://img.shields.io/badge/Python-3.9%2B-blue?logo=python&logoColor=white">
@@ -20,7 +20,18 @@
 
 ---
 
-## Features
+## Tools
+
+| Tool | Description |
+|---|---|
+| **[fd_watcher](#fd_watcher)** | Real-time fd distribution monitor — catch ashmem leaks |
+| **[cpu_watcher](#cpu_watcher)** | Real-time function-level CPU instruction profiler via simpleperf |
+
+---
+
+## fd_watcher
+
+### Features
 
 | | |
 |---|---|
@@ -164,6 +175,107 @@ adb root
 **Process disappears after force-stop?**
 
 FdWatcher auto-reconnects and resets △baseline on the new PID automatically.
+
+---
+
+## cpu_watcher
+
+Real-time function-level CPU instruction profiler using `simpleperf`. Periodically runs `simpleperf record` + `simpleperf report` on the device and renders per-function instruction counts in a TUI.
+
+### Features
+
+| | |
+|---|---|
+| **Function-level profiling** | Shows per-function CPU instruction counts ranked by hotness |
+| **Delta tracking** | `Δ/prev` (vs last cycle) and `Δ/baseline` (vs startup) |
+| **Search & filter** | `/` to filter by function name or DSO module |
+| **Pause / resume** | `p` to freeze the display while analyzing |
+| **Flamegraph export** | `f` to export folded-stack data for flamegraph.pl |
+| **Snapshot dump** | `d` to save current profile to a text file |
+| **Auto-detect adb** | WSL-aware — finds `adb.exe` automatically |
+| **Configurable sampling** | `--duration` and `--interval` control sampling behavior |
+
+### Quick Start
+
+```bash
+# Monitor by package name
+python3 cpu_watcher.py com.example.myapp
+
+# Custom sampling: 2s record, 5s interval
+python3 cpu_watcher.py com.example.myapp -d 2 -i 5
+
+# Monitor by PID with specific adb
+python3 cpu_watcher.py 28907 --adb /mnt/d/Sdk/platform-tools/adb.exe
+
+# Use cpu-cycles instead of instructions
+python3 cpu_watcher.py com.example.myapp -e cpu-cycles:u
+
+# Also works as a module
+python3 -m cpu_watcher com.example.myapp
+```
+
+### CLI Reference
+
+```
+usage: cpu_watcher [-h] [--duration DURATION] [--interval INTERVAL]
+                   [--event EVENT] [--adb ADB] [--max-entries MAX_ENTRIES]
+                   target
+
+positional arguments:
+  target                Package name or PID
+
+options:
+  --duration, -d        simpleperf record duration in seconds (default: 1)
+  --interval, -i        Polling interval in seconds (default: 3)
+  --event, -e           PMU event name (default: instructions:u)
+  --adb ADB             Path to adb executable (auto-detected)
+  --max-entries, -n     Max entries to display (default: 50)
+```
+
+### Key Bindings
+
+| Key | Action |
+|---|---|
+| `↑` / `↓` | Move cursor |
+| `p` | Pause / resume sampling |
+| `r` | Force immediate refresh |
+| `z` | Reset Δ/baseline |
+| `/` | Search / filter by function or module |
+| `Esc` | Close search |
+| `d` | Dump snapshot to file |
+| `f` | Export flamegraph data |
+| `s` | Save SVG screenshot |
+| `?` | Help overlay |
+| `q` | Quit |
+
+### Column Reference
+
+| Column | Description |
+|---|---|
+| # | Rank by instruction count |
+| % | Percentage of total events |
+| Instructions | Event count for this function |
+| Δ/prev | Change vs previous cycle |
+| Δ/base | Cumulative change vs baseline |
+| Module | Shared object / DSO name |
+| Function | Symbol name (truncated for readability) |
+
+### How It Works
+
+```
+simpleperf record --app <package> --duration N -e instructions:u
+  → simpleperf report --csv --sort dso,symbol
+  → parse CSV output
+  → compute deltas (prev + baseline)
+  → render in Textual DataTable
+```
+
+### Requirements
+
+- Android device with `simpleperf` available (userdebug/eng build or NDK simpleperf)
+- `adb` connection
+- For `--app` mode (default): target app must be debuggable
+- For `-p` mode (PID): may require root depending on SELinux policy
 
 ---
 
