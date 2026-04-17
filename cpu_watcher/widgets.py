@@ -80,15 +80,36 @@ def truncate_symbol(symbol: str, max_len: int = 45) -> str:
     return symbol[:max_len - 1] + "…"
 
 
-_JAVA_DSO_SUFFIXES = (".apk", ".odex", ".oat", ".vdex", ".dex")
+_JAVA_DSO_SUFFIXES = (".apk", ".odex", ".oat", ".vdex", ".dex", ".jar")
+
+# framework 包名前缀 — 用于区分 framework Java 和业务 Java
+_FRAMEWORK_PREFIXES = (
+    "android.", "androidx.", "com.android.", "dalvik.", "java.", "javax.",
+    "kotlin.", "kotlinx.", "sun.", "libcore.", "org.apache.",
+)
 
 
 def is_java_entry(dso: str) -> bool:
-    """判断 DSO 是否属于 Java/Kotlin 代码层。"""
+    """判断 DSO 是否属于 Java/Kotlin 代码层（含 framework）。"""
     if "[JIT app cache]" in dso:
         return True
     if dso.endswith(_JAVA_DSO_SUFFIXES):
         return True
+    return False
+
+
+def is_business_entry(dso: str, symbol: str, package: str) -> bool:
+    """判断是否属于业务代码（匹配包名或排除 framework 前缀的 Java）。"""
+    if not is_java_entry(dso):
+        return False
+    # 包名精确匹配
+    if package and package in symbol:
+        return True
+    # 排除已知 framework 前缀，剩下的视为业务 / 三方库
+    if not any(symbol.startswith(p) for p in _FRAMEWORK_PREFIXES):
+        # 排除 art_jni_trampoline 等无名 native stub
+        if symbol and not symbol.startswith("art_") and "." in symbol:
+            return True
     return False
 
 
@@ -191,8 +212,10 @@ class PerfTable(DataTable):
         self,
         snapshot: DeltaSnapshot,
         filter_text: str = "",
-        java_only: bool = False,
+        filter_mode: str = "all",
+        package: str = "",
     ) -> None:
+        """filter_mode: 'all' | 'java' | 'business'"""
         saved_key: str | None = None
         try:
             if self.row_count > 0:
@@ -206,8 +229,10 @@ class PerfTable(DataTable):
         self.clear()
 
         entries = snapshot.entries
-        if java_only:
+        if filter_mode == "java":
             entries = [de for de in entries if is_java_entry(de.entry.dso)]
+        elif filter_mode == "business":
+            entries = [de for de in entries if is_business_entry(de.entry.dso, de.entry.symbol, package)]
         if filter_text:
             needle = filter_text.lower()
             entries = [
