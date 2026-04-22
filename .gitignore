@@ -14,6 +14,9 @@ fdwatch_dump_*.txt
 cpu_perf_dump_*.txt
 cpu_perf_flame_*.folded
 
+# gh_watcher runtime outputs
+gh_watcher_dump_*.json
+
 # Auto-generated screenshots (keep docs/ tracked)
 /FdWatcherApp_*.svg
 
